@@ -2097,6 +2097,132 @@ export class MonksActiveTiles {
             }
         }
 
+        let doorControl = async function (wrapped, ...args) {
+            if (setting("allow-door-passthrough")) {
+                await new Promise((resolve) => { resolve(); });
+            }
+
+            let triggerDoor = function (wall) {
+                if (wall && setting("allow-door")) {
+                    //check if this is associated with a Tile
+                    if (wall.flags["monks-active-tiles"]?.entity) {
+                        if ((!!wall.flags["monks-active-tiles"][wall._wallchange || "checklock"]) ||
+                            (wall.flags["monks-active-tiles"].open == undefined && wall.flags["monks-active-tiles"].close == undefined && wall.flags["monks-active-tiles"].lock == undefined && wall.flags["monks-active-tiles"].secret == undefined && wall.flags["monks-active-tiles"].checklock == undefined)) {
+
+                            let entity = wall.flags['monks-active-tiles']?.entity;
+                            if (typeof entity == "string")
+                                entity = JSON.parse(entity || "{}");
+                            if (entity.id) {
+                                let walls = [wall];
+
+                                let docs = [];
+                                if (entity.id.startsWith("tagger")) {
+                                    if (game.modules.get('tagger')?.active) {
+                                        let tag = entity.id.substring(7);
+
+                                        let options = {};
+                                        if (!entity.match || entity.match == "any")
+                                            options.matchAny = true;
+                                        if (entity.match == "exact")
+                                            options.matchExactly = true;
+
+                                        if (entity.scene == "_all")
+                                            options.allScenes = true;
+                                        else if (entity.scene !== "_active" && entity.scene)
+                                            options.sceneId = entity.scene;
+
+                                        docs = Tagger.getByTag(tag, options);
+
+                                        if (entity.scene == "_all")
+                                            docs = [].concat(...Object.values(docs));
+                                    }
+                                } else if (entity.id == "within") {
+                                    // Find the tile under this door
+                                    for (let tile of wall.parent.tiles) {
+                                        let triggerData = tile.flags["monks-active-tiles"] || {};
+                                        let triggers = MonksActiveTiles.getTrigger(triggerData?.trigger);
+                                        if (triggerData?.active && triggerData.actions?.length > 0 && triggers.includes("door")) {
+
+                                            let pt1 = { x: wall.c[0], y: wall.c[1] };
+                                            let pt2 = { x: wall.c[2], y: wall.c[3] };
+                                            if (tile.pointWithin(pt1) || tile.pointWithin(pt2))
+                                                docs.push(tile);
+                                            else {
+                                                let collisions = tile.getIntersections(pt1, pt2);
+                                                if (collisions.length) {
+                                                    docs.push(tile);
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    let parts = entity.id.split(".");
+
+                                    const [docName, docId] = parts.slice(0, 2);
+                                    parts = parts.slice(2);
+                                    const collection = CONFIG[docName].collection.instance;
+                                    let entry = collection.get(docId);
+
+                                    while (entry && (parts.length > 1)) {
+                                        const [embeddedName, embeddedId] = parts.slice(0, 2);
+                                        entry = entry.getEmbeddedDocument(embeddedName, embeddedId);
+                                        parts = parts.slice(2);
+                                    }
+
+                                    docs = [entry];
+                                }
+
+                                if (docs.length) {
+                                    let results = {};
+                                    for (let doc of docs) {
+                                        if (!doc) continue;
+                                        let triggerData = getProperty(doc, "flags.monks-active-tiles");
+                                        if (triggerData?.active) {
+                                            if (setting("prevent-when-paused") && game.paused && !game.user.isGM && triggerData.allowpaused !== true)
+                                                return;
+
+                                            //check to see if this trigger is restricted by control type
+                                            if ((triggerData.controlled == 'gm' && !game.user.isGM) || (triggerData.controlled == 'player' && game.user.isGM))
+                                                return;
+
+                                            let tokens = canvas.tokens.controlled.map(t => t.document);
+                                            //check to see if this trigger is per token, and already triggered
+                                            if (triggerData.pertoken) {
+                                                tokens = tokens.filter(t => !doc.hasTriggered(t.id)); //.uuid
+                                                if (tokens.length == 0)
+                                                    return;
+                                            }
+
+                                            let result = doc.trigger({ tokens: tokens, method: 'door', options: { walls: walls, value: { walls: walls }, change: wall._wallchange || "checklock" } }) || {};
+                                            mergeObject(results, result);
+                                        }
+                                    }
+                                    return results;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            let result = wrapped(...args);
+            if (result instanceof Promise) {
+                return result.then((wall) => {
+                    let w = wall || args[0]?.target?.wall?.document;
+                    if (w && w instanceof WallDocument) {
+                        triggerDoor(w);
+                        delete w._wallchange;
+                    }
+                });
+            } else {
+                if (this.wall) {
+                    triggerDoor(this.wall.document);
+                    delete this.wall.document._wallchange;
+                }
+                return result;
+            }
+        }
+
         if (game.modules.get("lib-wrapper")?.active) {
             libWrapper.register("monks-active-tiles", "DoorControl.prototype._onRightDown", doorControl, "WRAPPER");
         } else {
