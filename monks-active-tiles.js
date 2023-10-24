@@ -2097,23 +2097,27 @@ export class MonksActiveTiles {
             }
         }
 
-        let doorControl = async function (wrapped, ...args) {
-            if (setting("allow-door-passthrough")) {
+        let noteControl =  async function (wrapped, ...args) {
+            if (setting("allow-note-passthrough")) {
                 await new Promise((resolve) => { resolve(); });
             }
 
-            let triggerDoor = function (wall) {
-                if (wall && setting("allow-door")) {
-                    //check if this is associated with a Tile
-                    if (wall.flags["monks-active-tiles"]?.entity) {
-                        if ((!!wall.flags["monks-active-tiles"][wall._wallchange || "checklock"]) ||
-                            (wall.flags["monks-active-tiles"].open == undefined && wall.flags["monks-active-tiles"].close == undefined && wall.flags["monks-active-tiles"].lock == undefined && wall.flags["monks-active-tiles"].secret == undefined && wall.flags["monks-active-tiles"].checklock == undefined)) {
+            const isRightClick = args[0].type === "rightclick" || args[0].type === "rightdown";
+            const isLeftClick = args[0].type === "leftclick" || args[0].type === "leftdown";
 
-                            let entity = wall.flags['monks-active-tiles']?.entity;
+            let triggerNote = function (note) {
+                if (note && setting("allow-note")) {
+                    //check if this is associated with a Tile
+                    if (note.flags["monks-active-tiles"]?.entity) {
+                        if (
+                        (isLeftClick && note.flags["monks-active-tiles"].leftclick) ||
+                        (isRightClick && note.flags["monks-active-tiles"].rightclick)
+                        ) {
+                            let entity = note.flags['monks-active-tiles']?.entity;
                             if (typeof entity == "string")
                                 entity = JSON.parse(entity || "{}");
                             if (entity.id) {
-                                let walls = [wall];
+                                let notes = [note];
 
                                 let docs = [];
                                 if (entity.id.startsWith("tagger")) {
@@ -2137,14 +2141,14 @@ export class MonksActiveTiles {
                                             docs = [].concat(...Object.values(docs));
                                     }
                                 } else if (entity.id == "within") {
-                                    // Find the tile under this door
-                                    for (let tile of wall.parent.tiles) {
+                                    // Find the tile under this note
+                                    for (let tile of note.parent.tiles) {
                                         let triggerData = tile.flags["monks-active-tiles"] || {};
                                         let triggers = MonksActiveTiles.getTrigger(triggerData?.trigger);
-                                        if (triggerData?.active && triggerData.actions?.length > 0 && triggers.includes("door")) {
+                                        if (triggerData?.active && triggerData.actions?.length > 0 && triggers.includes("note")) {
 
-                                            let pt1 = { x: wall.c[0], y: wall.c[1] };
-                                            let pt2 = { x: wall.c[2], y: wall.c[3] };
+                                            let pt1 = { x: note.c[0], y: note.c[1] };
+                                            let pt2 = { x: note.c[2], y: note.c[3] };
                                             if (tile.pointWithin(pt1) || tile.pointWithin(pt2))
                                                 docs.push(tile);
                                             else {
@@ -2193,7 +2197,7 @@ export class MonksActiveTiles {
                                                     return;
                                             }
 
-                                            let result = doc.trigger({ tokens: tokens, method: 'door', options: { walls: walls, value: { walls: walls }, change: wall._wallchange || "checklock" } }) || {};
+                                            let result = doc.trigger({ tokens: tokens, method: 'note', options: { notes: notes, value: { notes: notes }, change: note._notechange } }) || {};
                                             mergeObject(results, result);
                                         }
                                     }
@@ -2207,17 +2211,17 @@ export class MonksActiveTiles {
 
             let result = wrapped(...args);
             if (result instanceof Promise) {
-                return result.then((wall) => {
-                    let w = wall || args[0]?.target?.wall?.document;
-                    if (w && w instanceof WallDocument) {
-                        triggerDoor(w);
-                        delete w._wallchange;
+                return result.then((note) => {
+                    let w = note || args[0]?.target?.note?.document;
+                    if (w && w instanceof NoteDocument) {
+                        triggerNote(w);
+                        delete w._notechange;
                     }
                 });
             } else {
-                if (this.wall) {
-                    triggerDoor(this.wall.document);
-                    delete this.wall.document._wallchange;
+                if (this.note) {
+                    triggerNote(this.note.document);
+                    delete this.note.document._notechange;
                 }
                 return result;
             }
@@ -2238,6 +2242,41 @@ export class MonksActiveTiles {
             const oldDoorControl = DoorControl.prototype._onMouseDown;
             DoorControl.prototype._onMouseDown = function (event) {
                 return doorControl.call(this, oldDoorControl.bind(this), ...arguments);
+            }
+        }
+
+        if (game.modules.get("lib-wrapper")?.active) {
+            libWrapper.register("monks-active-tiles", "Note.prototype._onClickLeft", noteControl, "WRAPPER");
+        } else {
+            const oldNoteClickLeft = Note.prototype._onClickLeft;
+            Note.prototype._onClickLeft = function (event) {
+                return noteControl.call(this, oldNoteClickLeft.bind(this), ...arguments);
+            }
+        }
+
+        if (game.modules.get("lib-wrapper")?.active) {
+            libWrapper.register("monks-active-tiles", "Note.prototype._onClickRight", noteControl, "WRAPPER");
+        } else {
+            const oldNoteClickRight = Note.prototype._onClickRight;
+            Note.prototype._onClickRight = function (event) {
+                return noteControl.call(this, oldNoteClickRight.bind(this), ...arguments);
+            }
+        }
+
+        // Allow left and right click on notes on token layer https://github.com/foundryvtt/foundryvtt/issues/8770
+        if(setting("allow-note")) {
+            if (game.modules.get("lib-wrapper")?.active) {
+                libWrapper.register("monks-active-tiles", "Note.prototype._canControl", (user, event) => {
+                    if ( this.isPreview ) return false;
+                    return this.document.canUserModify(user, "update");
+                }, "WRAPPER");
+            } else {
+                const cached = Note.prototype._onCanControl;
+                Note.prototype._onCanControl = function (event) {
+                    const p = cached.apply(this, ...arguments);
+                    if ( this.isPreview ) return false;
+                    return this.document.canUserModify(user, "update");
+                };
             }
         }
 
@@ -5229,6 +5268,55 @@ Hooks.on('controlTerrain', (terrain, control) => {
 
 Hooks.on("renderPlaylistDirectory", (app, html, user) => {
     $('li.sound', html).click(MonksActiveTiles.selectPlaylistSound.bind(this));
+});
+
+Hooks.on("renderWallConfig", async (app, html, options) => {
+    if (setting("allow-door")) {
+        let entity = app.object.flags['monks-active-tiles']?.entity || {};
+        if (typeof entity == "string" && entity)
+            entity = JSON.parse(entity);
+        let tilename = "";
+        if (entity.id)
+            tilename = entity.id == "within" ? i18n("MonksActiveTiles.WithinWall") : await MonksActiveTiles.entityName(entity);
+        let triggerData = mergeObject({ tilename: tilename, showtagger: game.modules.get('tagger')?.active }, (app.object.flags['monks-active-tiles'] || {}));
+        triggerData.entity = JSON.stringify(entity);
+        let wallHtml = await renderTemplate("modules/monks-active-tiles/templates/wall-config.html", triggerData);
+
+        if ($('.sheet-tabs', html).length) {
+            $('.sheet-tabs', html).append($('<a>').addClass("item").attr("data-tab", "triggers").html('<i class="fas fa-running"></i> Triggers'));
+            $('<div>').addClass("tab action-sheet").attr('data-tab', 'triggers').html(wallHtml).insertAfter($('.tab:last', html));
+        } else {
+            let root = $('form', html);
+            if (root.length == 0)
+                root = html;
+            let basictab = $('<div>').addClass("tab").attr('data-tab', 'basic');
+            $('> *:not(button):not(footer)', root).each(function () {
+                basictab.append(this);
+            });
+
+            $(root).prepend($('<div>').addClass("tab action-sheet").attr('data-tab', 'triggers').html(wallHtml)).prepend(basictab).prepend(
+                $('<nav>')
+                    .addClass("sheet-tabs tabs")
+                    .append($('<a>').addClass("item active").attr("data-tab", "basic").html('<i class="fas fa-university"></i> Basic'))
+                    .append($('<a>').addClass("item").attr("data-tab", "triggers").html('<i class="fas fa-running"></i> Triggers'))
+            );
+        }
+
+        $('button[data-type="entity"]', html).on("click", ActionConfig.selectEntity.bind(app));
+        $('button[data-type="tagger"]', html).on("click", ActionConfig.addTag.bind(app));
+        $('button[data-type="within"]', html).on("click", (event) => {
+            let btn = $(event.currentTarget);
+            $('input[name="' + btn.attr('data-target') + '"]', app.element).val('{"id":"within","name":"' + i18n("MonksActiveTiles.WithinWall") + '"}').next().html(i18n("MonksActiveTiles.WithinWall"));
+        });
+
+        app.options.tabs = [{ navSelector: ".tabs", contentSelector: "form", initial: "basic" }];
+        app.options.height = "auto";
+        app._tabs = app._createTabHandlers();
+        const el = html[0];
+        app._tabs.forEach(t => t.bind(el));
+
+        app.setPosition();
+    }
 });
 
 Hooks.on("renderWallConfig", async (app, html, options) => {
