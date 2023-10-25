@@ -334,6 +334,12 @@
   "MonksActiveTiles.OnLeftClick": "On Left Click",
   "MonksActiveTiles.OnRightClick": "On Right Click",
 
+  "MonksActiveTiles.OnOpenDoor": "On Open Door",
+  "MonksActiveTiles.OnCloseDoor": "On Close Door",
+  "MonksActiveTiles.OnLockDoor": "On Lock Door",
+  "MonksActiveTiles.OnCheckLock": "On Check Lock",
+  "MonksActiveTiles.OnSecretDoor": "On Secret Door",
+
   "MonksActiveTiles.state.open": "Open",
   "MonksActiveTiles.state.closed": "Closed",
   "MonksActiveTiles.state.locked": "Locked",

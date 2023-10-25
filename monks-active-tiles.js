@@ -5319,53 +5319,53 @@ Hooks.on("renderWallConfig", async (app, html, options) => {
     }
 });
 
-Hooks.on("renderWallConfig", async (app, html, options) => {
-    if (setting("allow-door")) {
-        let entity = app.object.flags['monks-active-tiles']?.entity || {};
-        if (typeof entity == "string" && entity)
-            entity = JSON.parse(entity);
-        let tilename = "";
-        if (entity.id)
-            tilename = entity.id == "within" ? i18n("MonksActiveTiles.WithinWall") : await MonksActiveTiles.entityName(entity);
-        let triggerData = mergeObject({ tilename: tilename, showtagger: game.modules.get('tagger')?.active }, (app.object.flags['monks-active-tiles'] || {}));
-        triggerData.entity = JSON.stringify(entity);
-        let wallHtml = await renderTemplate("modules/monks-active-tiles/templates/wall-config.html", triggerData);
+Hooks.on("renderNoteConfig", async (app, html, options) => {
+  if (setting("allow-note")) {
+    let entity = app.object.flags['monks-active-tiles']?.entity || {};
+    if (typeof entity == "string" && entity)
+        entity = JSON.parse(entity);
+    let tilename = "";
+    if (entity.id)
+        tilename = entity.id == "within" ? i18n("MonksActiveTiles.WithinNote") : await MonksActiveTiles.entityName(entity);
+    let triggerData = mergeObject({ tilename: tilename, showtagger: game.modules.get('tagger')?.active }, (app.object.flags['monks-active-tiles'] || {}));
+    triggerData.entity = JSON.stringify(entity);
+    let noteHtml = await renderTemplate("modules/monks-active-tiles/templates/note-config.html", triggerData);
 
-        if ($('.sheet-tabs', html).length) {
-            $('.sheet-tabs', html).append($('<a>').addClass("item").attr("data-tab", "triggers").html('<i class="fas fa-running"></i> Triggers'));
-            $('<div>').addClass("tab action-sheet").attr('data-tab', 'triggers').html(wallHtml).insertAfter($('.tab:last', html));
-        } else {
-            let root = $('form', html);
-            if (root.length == 0)
-                root = html;
-            let basictab = $('<div>').addClass("tab").attr('data-tab', 'basic');
-            $('> *:not(button):not(footer)', root).each(function () {
-                basictab.append(this);
-            });
-
-            $(root).prepend($('<div>').addClass("tab action-sheet").attr('data-tab', 'triggers').html(wallHtml)).prepend(basictab).prepend(
-                $('<nav>')
-                    .addClass("sheet-tabs tabs")
-                    .append($('<a>').addClass("item active").attr("data-tab", "basic").html('<i class="fas fa-university"></i> Basic'))
-                    .append($('<a>').addClass("item").attr("data-tab", "triggers").html('<i class="fas fa-running"></i> Triggers'))
-            );
-        }
-
-        $('button[data-type="entity"]', html).on("click", ActionConfig.selectEntity.bind(app));
-        $('button[data-type="tagger"]', html).on("click", ActionConfig.addTag.bind(app));
-        $('button[data-type="within"]', html).on("click", (event) => {
-            let btn = $(event.currentTarget);
-            $('input[name="' + btn.attr('data-target') + '"]', app.element).val('{"id":"within","name":"' + i18n("MonksActiveTiles.WithinWall") + '"}').next().html(i18n("MonksActiveTiles.WithinWall"));
+    if ($('.sheet-tabs', html).length) {
+        $('.sheet-tabs', html).append($('<a>').addClass("item").attr("data-tab", "triggers").html('<i class="fas fa-running"></i> Triggers'));
+        $('<div>').addClass("tab action-sheet").attr('data-tab', 'triggers').html(noteHtml).insertAfter($('.tab:last', html));
+    } else {
+        let root = $('form', html);
+        if (root.length == 0)
+            root = html;
+        let basictab = $('<div>').addClass("tab").attr('data-tab', 'basic');
+        $('> *:not(button):not(footer)', root).each(function () {
+            basictab.append(this);
         });
 
-        app.options.tabs = [{ navSelector: ".tabs", contentSelector: "form", initial: "basic" }];
-        app.options.height = "auto";
-        app._tabs = app._createTabHandlers();
-        const el = html[0];
-        app._tabs.forEach(t => t.bind(el));
-
-        app.setPosition();
+        $(root).prepend($('<div>').addClass("tab action-sheet").attr('data-tab', 'triggers').html(noteHtml)).prepend(basictab).prepend(
+            $('<nav>')
+                .addClass("sheet-tabs tabs")
+                .append($('<a>').addClass("item active").attr("data-tab", "basic").html('<i class="fas fa-university"></i> Basic'))
+                .append($('<a>').addClass("item").attr("data-tab", "triggers").html('<i class="fas fa-running"></i> Triggers'))
+        );
     }
+
+    $('button[data-type="entity"]', html).on("click", ActionConfig.selectEntity.bind(app));
+    $('button[data-type="tagger"]', html).on("click", ActionConfig.addTag.bind(app));
+    $('button[data-type="within"]', html).on("click", (event) => {
+        let btn = $(event.currentTarget);
+        $('input[name="' + btn.attr('data-target') + '"]', app.element).val('{"id":"within","name":"' + i18n("MonksActiveTiles.WithinNote") + '"}').next().html(i18n("MonksActiveTiles.WithinNote"));
+    });
+
+    app.options.tabs = [{ navSelector: ".tabs", contentSelector: "form", initial: "basic" }];
+    app.options.height = "auto";
+    app._tabs = app._createTabHandlers();
+    const el = html[0];
+    app._tabs.forEach(t => t.bind(el));
+
+    app.setPosition();
+  }
 });
 
 Hooks.on("dropCanvasData", async (canvas, data, options, test) => {
