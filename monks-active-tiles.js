@@ -2098,6 +2098,15 @@ export class MonksActiveTiles {
         }
 
         let noteControl =  async function (wrapped, ...args) {
+            // CHECK IF YOU ARE NOT ON NOTE LAYER
+            const noteLayer = canvas.layers.find((layer) => layer.name === "NotesLayer");
+            //const activeLayer = canvas.layers.find((layer) => layer.active === true);
+            if (noteLayer?.active) {
+                return wrapped(...args);
+            }
+            
+            MonksActiveTiles.controlEntity(this);
+
             if (setting("allow-note-passthrough")) {
                 await new Promise((resolve) => { resolve(); });
             }
@@ -2264,21 +2273,31 @@ export class MonksActiveTiles {
         }
 
         // Allow left and right click on notes on token layer https://github.com/foundryvtt/foundryvtt/issues/8770
-        if(setting("allow-note")) {
-            if (game.modules.get("lib-wrapper")?.active) {
-                libWrapper.register("monks-active-tiles", "Note.prototype._canControl", (user, event) => {
-                    if ( this.isPreview ) return false;
-                    return this.document.canUserModify(user, "update");
-                }, "WRAPPER");
-            } else {
-                const cached = Note.prototype._onCanControl;
-                Note.prototype._onCanControl = function (event) {
-                    const p = cached.apply(this, ...arguments);
-                    if ( this.isPreview ) return false;
-                    return this.document.canUserModify(user, "update");
-                };
-            }
-        }
+        // if(setting("allow-note")) {
+        //     if (game.modules.get("lib-wrapper")?.active) {
+        //         libWrapper.register("monks-active-tiles", "Note.prototype._canControl", (wrapped, ...args) => {
+        //             // CHECK IF YOU ARE NOT ON NOTE LAYER
+        //             const noteLayer = canvas.layers.find((layer) => layer.name === "NotesLayer");
+        //             //const activeLayer = canvas.layers.find((layer) => layer.active === true);
+        //             if (noteLayer?.active) {
+        //                 return wrapped(...args);
+        //             } else {
+        //                 return wrapped(...args);
+        //                 // const [user, Xt] = args;
+        //                 // if ( this.isPreview ) return false;
+        //                 // return this.document.canUserModify(user, "update");
+        //             }
+
+        //         }, "WRAPPER");
+        //     } else {
+        //         const cached = Note.prototype._onCanControl;
+        //         Note.prototype._onCanControl = function (event) {
+        //             const p = cached.apply(this, ...arguments);
+        //             if ( this.isPreview ) return false;
+        //             return this.document.canUserModify(user, "update");
+        //         };
+        //     }
+        // }
 
         let playlistCollapse = function (wrapped, ...args) {
             let waitingType = MonksActiveTiles.waitingInput?.waitingfield?.data('type');
@@ -2547,14 +2566,14 @@ export class MonksActiveTiles {
             }
         }
 
-        if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.register("monks-active-tiles", "Note.prototype._onClickLeft", leftClick, "WRAPPER");
-        } else {
-            const oldOnClickLeft = Note.prototype._onClickLeft;
-            Note.prototype._onClickLeft = function (event) {
-                return leftClick.call(this, oldOnClickLeft.bind(this), ...arguments);
-            }
-        }
+        // if (game.modules.get("lib-wrapper")?.active) {
+        //     libWrapper.register("monks-active-tiles", "Note.prototype._onClickLeft", leftClick, "WRAPPER");
+        // } else {
+        //     const oldOnClickLeft = Note.prototype._onClickLeft;
+        //     Note.prototype._onClickLeft = function (event) {
+        //         return leftClick.call(this, oldOnClickLeft.bind(this), ...arguments);
+        //     }
+        // }
 
         if (!game.modules.get("drag-ruler")?.active && !game.modules.get("libruler")?.active) {
             /*
